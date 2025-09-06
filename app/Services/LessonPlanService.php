@@ -645,7 +645,7 @@ class LessonPlanService
     private function calculateSimpleRepeats(array $allEntries, int $startingIndex, int $startingPage, array $patternValues)
     {
         // Step 1: Build normal sequence
-        //this is test
+        //this is test j
         $normalSeq = array_fill(0, count($allEntries), 0);
         $currentWorksheet = intval($startingPage);
         
