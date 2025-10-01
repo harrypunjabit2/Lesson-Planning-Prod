@@ -1,10 +1,9 @@
 <?php
 
-// app/Http/Controllers/UserManagementController.php
-
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\UserRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -12,35 +11,28 @@ use Illuminate\Validation\Rule;
 
 class UserManagementController extends Controller
 {
-    /**
-     * Display a listing of users
-     */
     public function index()
-{
-    $users = User::orderBy('created_at', 'desc')->get();
-    $roles = User::getRoles(); // Add this line
-    return view('admin.users.index', compact('users', 'roles')); // Update this line
-}
-
-    /**
-     * Show the form for creating a new user
-     */
-    public function create()
     {
-        $roles = User::getRoles();
-        return view('admin.users.create', compact('roles'));
+        $users = User::with('userRoles')->orderBy('created_at', 'desc')->get();
+        $availableRoles = User::getRoleLabels();
+        
+        return view('admin.users.index', compact('users', 'availableRoles'));
     }
 
-    /**
-     * Store a newly created user
-     */
+    public function create()
+    {
+        $availableRoles = User::getRoleLabels();
+        return view('admin.users.create', compact('availableRoles'));
+    }
+
     public function store(Request $request)
     {
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'role' => ['required', Rule::in(array_keys(User::getRoles()))],
+            'roles' => 'required|array|min:1',
+            'roles.*' => ['required', Rule::in(User::getAllRoles())],
             'is_active' => 'boolean',
         ]);
 
@@ -49,15 +41,16 @@ class UserManagementController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'role' => $request->role,
                 'is_active' => $request->boolean('is_active', true),
             ]);
+
+            $user->syncRoles($request->roles);
 
             Log::info('User created', [
                 'created_by' => auth()->id(),
                 'user_id' => $user->id,
                 'email' => $user->email,
-                'role' => $user->role
+                'roles' => $request->roles
             ]);
 
             return redirect()->route('admin.users.index')
@@ -71,25 +64,23 @@ class UserManagementController extends Controller
         }
     }
 
-    /**
-     * Show the form for editing a user
-     */
     public function edit(User $user)
     {
-        $roles = User::getRoles();
-        return view('admin.users.edit', compact('user', 'roles'));
+        $user->load('userRoles');
+        $availableRoles = User::getRoleLabels();
+        $userRoles = $user->getRoles()->toArray();
+        
+        return view('admin.users.edit', compact('user', 'availableRoles', 'userRoles'));
     }
 
-    /**
-     * Update the specified user
-     */
     public function update(Request $request, User $user)
     {
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'password' => 'nullable|string|min:8|confirmed',
-            'role' => ['required', Rule::in(array_keys(User::getRoles()))],
+            'roles' => 'required|array|min:1',
+            'roles.*' => ['required', Rule::in(User::getAllRoles())],
             'is_active' => 'boolean',
         ]);
 
@@ -97,22 +88,21 @@ class UserManagementController extends Controller
             $updateData = [
                 'name' => $request->name,
                 'email' => $request->email,
-                'role' => $request->role,
                 'is_active' => $request->boolean('is_active', true),
             ];
 
-            // Only update password if provided
             if ($request->filled('password')) {
                 $updateData['password'] = Hash::make($request->password);
             }
 
             $user->update($updateData);
+            $user->syncRoles($request->roles);
 
             Log::info('User updated', [
                 'updated_by' => auth()->id(),
                 'user_id' => $user->id,
                 'email' => $user->email,
-                'role' => $user->role
+                'roles' => $request->roles
             ]);
 
             return redirect()->route('admin.users.index')
@@ -126,20 +116,18 @@ class UserManagementController extends Controller
         }
     }
 
-    /**
-     * Remove the specified user
-     */
     public function destroy(User $user)
     {
         try {
-            // Prevent admin from deleting themselves
             if ($user->id === auth()->id()) {
                 return redirect()->back()
                     ->with('error', 'You cannot delete your own account.');
             }
 
-            // Prevent deletion of the last admin
-            if ($user->isAdmin() && User::where('role', User::ROLE_ADMIN)->count() <= 1) {
+            if ($user->hasRole(User::ROLE_ADMIN) && 
+                User::whereHas('userRoles', function($q) {
+                    $q->where('role', User::ROLE_ADMIN);
+                })->count() <= 1) {
                 return redirect()->back()
                     ->with('error', 'Cannot delete the last administrator account.');
             }
@@ -148,7 +136,7 @@ class UserManagementController extends Controller
                 'deleted_by' => auth()->id(),
                 'user_id' => $user->id,
                 'email' => $user->email,
-                'role' => $user->role
+                'roles' => $user->getRoles()->toArray()
             ]);
 
             $user->delete();
@@ -163,13 +151,9 @@ class UserManagementController extends Controller
         }
     }
 
-    /**
-     * Toggle user active status
-     */
     public function toggleStatus(User $user)
     {
         try {
-            // Prevent admin from deactivating themselves
             if ($user->id === auth()->id()) {
                 return response()->json([
                     'success' => false,
@@ -177,8 +161,10 @@ class UserManagementController extends Controller
                 ]);
             }
 
-            // Prevent deactivation of the last admin
-            if ($user->isAdmin() && $user->is_active && User::where('role', User::ROLE_ADMIN)->where('is_active', true)->count() <= 1) {
+            if ($user->hasRole(User::ROLE_ADMIN) && $user->is_active && 
+                User::whereHas('userRoles', function($q) {
+                    $q->where('role', User::ROLE_ADMIN);
+                })->where('is_active', true)->count() <= 1) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Cannot deactivate the last active administrator.'
