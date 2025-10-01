@@ -22,9 +22,10 @@ class LessonPlan extends Model
         'year',
         'last_completed_page',
         'repeats',
+        'repeat_pages',
         'col_1', 'col_2', 'col_3', 'col_4', 'col_5',
         'col_6', 'col_7', 'col_8', 'col_9', 'col_10',
-        'input_field'
+        'input_field','hw_completed','time'
     ];
 
     protected $casts = [
@@ -112,4 +113,8 @@ class LessonPlan extends Model
     {
         return $query->orderBy('year')->orderBy('month')->orderBy('date');
     }
+    public function grading()
+{
+    return $this->hasMany(Grading::class, 'lessonplanid', 'id');
+}
 }

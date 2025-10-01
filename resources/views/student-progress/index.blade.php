@@ -1,4 +1,4 @@
-<!-- resources/views/student-progress/index.blade.php - Updated with Role Permissions -->
+<!-- resources/views/student-progress/index.blade.php - Complete Updated with Pages and Repeats System -->
 @extends('layouts.app')
 
 @section('title', 'Lesson Plan Tracker')
@@ -56,6 +56,49 @@
 .readonly-mode input,
 .readonly-mode button {
     pointer-events: none;
+}
+
+/* Styles for the repeat section */
+.repeat-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.repeat-input-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.repeat-input-group label {
+    font-size: 10px;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+.repeat-input-group input {
+    width: 40px;
+}
+
+@media (max-width: 768px) {
+    .repeat-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+    }
+    
+    .repeat-input-group {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    
+    .repeat-input-group input {
+        width: 50px;
+    }
+    
 }
 </style>
 
@@ -142,11 +185,25 @@
             <a href="{{ route('admin.setup') }}" class="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded font-medium text-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
                 Setup Data
             </a>
+            
             <a href="{{ route('admin.delete') }}" class="bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-2 rounded font-medium text-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
                 Delete Data
             </a>
+            <a href="{{ route('admin.activity-logs.index') }}" 
+   class="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-all {{ request()->routeIs('admin.activity-logs.*') ? 'bg-primary/20 text-primary' : '' }}">
+    Activity Logs
+</a>
+
+<a href="{{ route('admin.monthly-report.index') }}" 
+   class="block px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-all {{ request()->routeIs('admin.monthly-report.*') ? 'bg-primary/20 text-primary' : '' }}">
+    Monthly Report
+</a>
+
         </div>
         @endif
+
+
+
     </div>
 </div>
 
@@ -196,6 +253,7 @@ let selectedDateRange = null;
 const canEdit = {{ auth()->user()->canEdit() ? 'true' : 'false' }};
 const userRole = '{{ auth()->user()->role }}';
 
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
@@ -209,12 +267,12 @@ async function initializeApp() {
     setupAutocomplete();
     
     // Auto-load lesson plan for current month
-    setTimeout(() => {
-        loadLessonPlan();
+  /*  setTimeout(() => {
+      //  loadLessonPlan();
     }, 1000);
+    */
 }
 
-// [Previous date range functions remain the same...]
 function initializeDateRangeFilter() {
     document.getElementById('dateRangeTrigger').addEventListener('click', openDateRangePopup);
     document.getElementById('dateRangeClear').addEventListener('click', clearDateRange);
@@ -313,7 +371,6 @@ function closeAllDropdowns() {
     studentDropdown.style.width = '';
 }
 
-// [Previous multi-select month functions remain the same...]
 function initializeMultiSelect() {
     const container = document.getElementById('monthMultiSelect');
     const display = document.getElementById('monthDisplay');
@@ -393,7 +450,6 @@ function updateMonthDisplay() {
     }
 }
 
-// [Previous load data functions remain the same...]
 async function loadStudents() {
     try {
         const response = await fetch('/student-progress/students');
@@ -437,7 +493,6 @@ async function loadSubjects() {
     }
 }
 
-// [Previous autocomplete and load functions remain the same...]
 function setupAutocomplete() {
     const searchInput = document.getElementById('studentNameSearch');
     const dropdown = document.getElementById('studentNameDropdown');
@@ -532,7 +587,6 @@ function setupAutocomplete() {
     }
 }
 
-// [Previous load lesson plan functions remain mostly the same...]
 async function loadLessonPlan() {
     if (selectedDateRange) {
         await loadLessonPlanByDateRange();
@@ -620,7 +674,6 @@ async function loadLessonPlanByMonths() {
     }
 }
 
-// Updated display function with role-based permissions
 function displayLessonPlan(data, period, year) {
     const results = document.getElementById('results');
     
@@ -656,7 +709,7 @@ function displayLessonPlan(data, period, year) {
                             <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Worksheet</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">New</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Completed</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Repeats</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Pages/Repeats</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Student</th>
                             <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Subject</th>
                         </tr>
@@ -711,14 +764,27 @@ function displayLessonPlan(data, period, year) {
                     </div>
                 </td>
                 <td class="px-3 py-3">
-                    <div class="flex items-center gap-2 ${isReadOnly ? 'readonly-mode' : ''}">
-                        <input type="number" 
-                               class="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
-                               value="${row.repeats || ''}"
-                               id="repeats_${studentKey}_${row.subject}_${row.month}_${row.date}"
-                               ${isReadOnly ? 'disabled readonly' : ''}>
+                    <div class="repeat-controls ${isReadOnly ? 'readonly-mode' : ''}">
+                        <div class="repeat-input-group">
+                            <label>Pages</label>
+                            <input type="number" 
+                                   class="px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
+                                   value="${row.repeatPages || ''}"
+                                   id="pages_${studentKey}_${row.subject}_${row.month}_${row.date}"
+                                   min="0"
+                                   ${isReadOnly ? 'disabled readonly' : ''}>
+                        </div>
+                        <div class="repeat-input-group">
+                            <label>Repeats</label>
+                            <input type="number" 
+                                   class="px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
+                                   value="${row.repeats || ''}"
+                                   id="repeats_${studentKey}_${row.subject}_${row.month}_${row.date}"
+                                   min="0"
+                                   ${isReadOnly ? 'disabled readonly' : ''}>
+                        </div>
                         ${!isReadOnly ? `<button class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-all" 
-                                onclick="updateRepeats('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
+                                onclick="updatePagesAndRepeats('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
                             Update
                         </button>` : ''}
                     </div>
@@ -739,85 +805,68 @@ function displayLessonPlan(data, period, year) {
     results.innerHTML = html;
 }
 
-// Helper Functions
-function createFullName(firstName, lastName) {
-    return lastName ? `${firstName} ${lastName}`.trim() : firstName.trim();
-}
-
-function applyClientFilters(data) {
-    let filteredData = data;
+// Updated function to handle pages and repeats together
+async function updatePagesAndRepeats(fullStudentName, subject, month, date) {
+    if (!canEdit) {
+        showError('You do not have permission to edit data.');
+        return;
+    }
     
-    const studentNameSearch = document.getElementById('studentNameSearch').value.trim().toLowerCase();
-    if (studentNameSearch) {
-        filteredData = filteredData.filter(row => {
-            const fullName = createFullName(row.studentName, row.studentLastName).toLowerCase();
-            return fullName.includes(studentNameSearch);
+    const studentKey = fullStudentName.replace(/\s+/g, '_');
+    const pagesInputId = `pages_${studentKey}_${subject}_${month}_${date}`;
+    const repeatsInputId = `repeats_${studentKey}_${subject}_${month}_${date}`;
+    const pagesElement = document.getElementById(pagesInputId);
+    const repeatsElement = document.getElementById(repeatsInputId);
+    
+    const pages = pagesElement.value;
+    const repeats = repeatsElement.value;
+    
+    if (pages === '' || isNaN(pages) || parseInt(pages) < 0) {
+        showError('Please enter a valid number of pages (0 or higher)');
+        return;
+    }
+    
+    if (repeats === '' || isNaN(repeats) || parseInt(repeats) < 0) {
+        showError('Please enter a valid number of repeats (0 or higher)');
+        return;
+    }
+    
+    showLoading(true, 'Updating pages and repeats...');
+    
+    try {
+        const response = await fetch('/student-progress/update-repeats', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify({
+                student_name: fullStudentName,
+                subject: subject,
+                month: month,
+                date: parseInt(date),
+                pages: parseInt(pages),
+                repeats: parseInt(repeats)
+            })
         });
-    }
-    
-    const subjectFilter = document.getElementById('subjectFilter').value;
-    if (subjectFilter) {
-        filteredData = filteredData.filter(row => row.subject === subjectFilter);
-    }
-    
-    const studentFilter = document.getElementById('studentFilter').value;
-    if (studentFilter) {
-        const lastDashIndex = studentFilter.lastIndexOf(' - ');
-        if (lastDashIndex !== -1) {
-            const fullStudentName = studentFilter.substring(0, lastDashIndex);
-            const subject = studentFilter.substring(lastDashIndex + 3);
-            
-            filteredData = filteredData.filter(row => {
-                const rowFullName = createFullName(row.studentName, row.studentLastName);
-                return rowFullName === fullStudentName && row.subject === subject;
-            });
+        
+        const result = await response.json();
+        showLoading(false);
+        
+        if (result.success) {
+            showSuccess(result.message);
+            setTimeout(() => {
+                loadLessonPlan();
+            }, 1000);
+        } else {
+            showError(result.error);
         }
+    } catch (error) {
+        showLoading(false);
+        showError('Failed to update pages and repeats: ' + error.message);
     }
-    
-    return filteredData;
 }
 
-function sortLessonData(data) {
-    return data.sort((a, b) => {
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'];
-        
-        const monthA = monthNames.indexOf(a.month);
-        const monthB = monthNames.indexOf(b.month);
-        
-        if (monthA !== monthB) return monthA - monthB;
-        if (a.date !== b.date) return a.date - b.date;
-        
-        const fullNameA = createFullName(a.studentName, a.studentLastName);
-        const fullNameB = createFullName(b.studentName, b.studentLastName);
-        if (fullNameA !== fullNameB) return fullNameA.localeCompare(fullNameB);
-        
-        return a.subject.localeCompare(b.subject);
-    });
-}
-
-function isDateInPast(dateStr, month, year) {
-    const now = new Date();
-    const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    const monthIndex = monthNames.indexOf(month);
-    if (monthIndex === -1) return false;
-    
-    const targetDate = new Date(year, monthIndex, parseInt(dateStr));
-    
-    // Get today's date without time (set to midnight)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Set target date to midnight for fair comparison
-    targetDate.setHours(0, 0, 0, 0);
-    
-    return targetDate < today;
-}
-
-// Update Functions - Only available for users with edit permissions
 async function updateLastCompleted(fullStudentName, subject, month, date) {
     if (!canEdit) {
         showError('You do not have permission to edit data.');
@@ -924,68 +973,167 @@ async function updateLevel(fullStudentName, subject, month, date) {
     }
 }
 
-async function updateRepeats(fullStudentName, subject, month, date) {
-    if (!canEdit) {
-        showError('You do not have permission to edit data.');
-        return;
-    }
+// Helper Functions
+function createFullName(firstName, lastName) {
+    return lastName ? `${firstName} ${lastName}`.trim() : firstName.trim();
+}
+
+function applyClientFilters(data) {
+    let filteredData = data;
     
-    const studentKey = fullStudentName.replace(/\s+/g, '_');
-    const inputId = `repeats_${studentKey}_${subject}_${month}_${date}`;
-    const inputElement = document.getElementById(inputId);
-    const repeats = inputElement.value;
-    
-    if (repeats === '' || isNaN(repeats)) {
-        showError('Please enter a valid number of repeats (-1 to stop, 0 or higher)');
-        return;
-    }
-    
-    showLoading(true, 'Updating repeats...');
-    
-    try {
-        const response = await fetch('/student-progress/update-repeats', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken
-            },
-            body: JSON.stringify({
-                student_name: fullStudentName,
-                subject: subject,
-                month: month,
-                date: parseInt(date),
-                repeats: parseInt(repeats)
-            })
+    const studentNameSearch = document.getElementById('studentNameSearch').value.trim().toLowerCase();
+    if (studentNameSearch) {
+        filteredData = filteredData.filter(row => {
+            const fullName = createFullName(row.studentName, row.studentLastName).toLowerCase();
+            return fullName.includes(studentNameSearch);
         });
-        
-        const result = await response.json();
-        showLoading(false);
-        
-        if (result.success) {
-            showSuccess(result.message);
-            setTimeout(() => {
-                loadLessonPlan();
-            }, 1000);
-        } else {
-            showError(result.error);
-        }
-    } catch (error) {
-        showLoading(false);
-        showError('Failed to update repeats: ' + error.message);
     }
+    
+    const subjectFilter = document.getElementById('subjectFilter').value;
+    if (subjectFilter) {
+        filteredData = filteredData.filter(row => row.subject === subjectFilter);
+    }
+    
+    const studentFilter = document.getElementById('studentFilter').value;
+    if (studentFilter) {
+        const lastDashIndex = studentFilter.lastIndexOf(' - ');
+        if (lastDashIndex !== -1) {
+            const fullStudentName = studentFilter.substring(0, lastDashIndex);
+            const subject = studentFilter.substring(lastDashIndex + 3);
+            
+            filteredData = filteredData.filter(row => {
+                const rowFullName = createFullName(row.studentName, row.studentLastName);
+                return rowFullName === fullStudentName && row.subject === subject;
+            });
+        }
+    }
+    
+    return filteredData;
+}
+
+function sortLessonData(data) {
+    return data.sort((a, b) => {
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        const monthA = monthNames.indexOf(a.month);
+        const monthB = monthNames.indexOf(b.month);
+        
+        if (monthA !== monthB) return monthA - monthB;
+        if (a.date !== b.date) return a.date - b.date;
+        
+        const fullNameA = createFullName(a.studentName, a.studentLastName);
+        const fullNameB = createFullName(b.studentName, b.studentLastName);
+        if (fullNameA !== fullNameB) return fullNameA.localeCompare(fullNameB);
+        
+        return a.subject.localeCompare(b.subject);
+    });
+}
+
+function isDateInPast(dateStr, month, year) {
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthIndex = monthNames.indexOf(month);
+    if (monthIndex === -1) return false;
+    
+    const targetDate = new Date(year, monthIndex, parseInt(dateStr));
+    const today = getPSTDate();
+    targetDate.setHours(0, 0, 0, 0);
+    
+    return targetDate < today;
+}
+
+function getPSTDate() {
+    const now = new Date();
+    const pstOffset = -8 * 60;
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const pstTime = new Date(utc + (pstOffset * 60000));
+    pstTime.setHours(0, 0, 0, 0);
+    return pstTime;
+}
+
+function handleSubjectFilterChange() {
+    if (allStudentSubjects.length > 0) {
+        populateStudentFilter(allStudentSubjects);
+    }
+}
+
+function populateStudentFilter(students) {
+    const select = document.getElementById('studentFilter');
+    const selectedSubject = document.getElementById('subjectFilter').value;
+    
+    select.innerHTML = '<option value="">All Students</option>';
+    
+    const filteredStudents = selectedSubject ? 
+        students.filter(student => student.endsWith(' - ' + selectedSubject)) : 
+        students;
+    
+    filteredStudents.forEach(function(student) {
+        const option = document.createElement('option');
+        option.value = student;
+        option.textContent = student;
+        select.appendChild(option);
+    });
+}
+
+function showLoading(show, message = 'Loading...') {
+    const loading = document.getElementById('loading');
+    if (show) {
+        loading.innerHTML = `<span class="loading-spinner">${message}</span>`;
+        loading.classList.remove('hidden');
+    } else {
+        loading.classList.add('hidden');
+    }
+}
+
+function showError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'fixed top-4 right-4 bg-red-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-lg z-50 max-w-md';
+    errorDiv.innerHTML = `
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="text-sm">${message}</span>
+        </div>
+    `;
+    document.body.appendChild(errorDiv);
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.parentNode.removeChild(errorDiv);
+        }
+    }, 5000);
+}
+
+function showSuccess(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'fixed top-4 right-4 bg-green-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-lg z-50 max-w-md';
+    successDiv.innerHTML = `
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            <span class="text-sm">${message}</span>
+        </div>
+    `;
+    document.body.appendChild(successDiv);
+    setTimeout(() => {
+        if (successDiv.parentNode) {
+            successDiv.parentNode.removeChild(successDiv);
+        }
+    }, 3000);
 }
 
 // Event listeners
 document.getElementById('studentFilter').addEventListener('change', loadLessonPlan);
-//document.getElementById('subjectFilter').addEventListener('change', loadLessonPlan);
 document.getElementById('subjectFilter').addEventListener('change', function() {
-            handleSubjectFilterChange();
-            // Don't call applyFilters here - we only want to update the dropdown
-        });
+    handleSubjectFilterChange();
+});
 document.getElementById('yearInput').addEventListener('change', loadLessonPlan);
 document.getElementById('loadLessonPlan').addEventListener('click', loadLessonPlan);
 
-// Debounced search
 let searchTimeout;
 document.getElementById('studentNameSearch').addEventListener('input', function() {
     clearTimeout(searchTimeout);
@@ -994,33 +1142,6 @@ document.getElementById('studentNameSearch').addEventListener('input', function(
     }, 500);
 });
 
-function handleSubjectFilterChange() {
-            // Update the Student & Subject dropdown based on selected subject
-            if (allStudentSubjects.length > 0) {
-                populateStudentFilter(allStudentSubjects);
-            }
-        }
-
-        function populateStudentFilter(students) {
-            const select = document.getElementById('studentFilter');
-            const selectedSubject = document.getElementById('subjectFilter').value;
-            
-            select.innerHTML = '<option value="">All Students</option>';
-            
-            // Filter students based on selected subject
-            const filteredStudents = selectedSubject ? 
-                students.filter(student => student.endsWith(' - ' + selectedSubject)) : 
-                students;
-            
-            filteredStudents.forEach(function(student) {
-                const option = document.createElement('option');
-                option.value = student;
-                option.textContent = student;
-                select.appendChild(option);
-            });
-        }
-
-// Global click handler to close dropdowns
 document.addEventListener('click', function(event) {
     if (!event.target.closest('#monthMultiSelect')) {
         closeAllDropdowns();
@@ -1030,12 +1151,10 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// Handle window resize to reposition fixed dropdowns
 window.addEventListener('resize', function() {
     closeAllDropdowns();
 });
 
-// Handle window scroll to reposition fixed dropdowns
 window.addEventListener('scroll', function() {
     const monthDropdown = document.getElementById('monthDropdown');
     const studentDropdown = document.getElementById('studentNameDropdown');

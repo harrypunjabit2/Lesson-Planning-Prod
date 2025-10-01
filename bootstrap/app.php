@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'edit.permission' => \App\Http\Middleware\CheckEditPermission::class,
+            'grade.permission' => \App\Http\Middleware\CheckGradePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

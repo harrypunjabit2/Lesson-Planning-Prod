@@ -1,6 +1,6 @@
 <?php
 
-// app/Http/Controllers/StudentProgressController.php - FINAL FIX
+// app/Http/Controllers/StudentProgressController.php - FIXED VERSION
 
 namespace App\Http\Controllers;
 
@@ -10,11 +10,15 @@ use App\Services\StudentConfigService;
 use App\Models\StudentConfig;
 use App\Models\LessonPlan;
 use App\Models\NewConcept;
+use App\Models\SubjectLevel;
 use Illuminate\Http\Request;
+use App\Traits\LogsUserActivity;
 use Illuminate\Support\Facades\Log;
 
 class StudentProgressController extends Controller
 {
+    use LogsUserActivity;
+    
     protected $lessonPlanService;
     protected $studentConfigService;
 
@@ -60,6 +64,64 @@ class StudentProgressController extends Controller
         } catch (\Exception $e) {
             Log::error('Error getting subjects: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to load subjects'], 500);
+        }
+    }
+
+    /**
+     * Get available levels for a specific subject
+     */
+    public function getSubjectLevels(Request $request)
+    {
+        try {
+            $request->validate([
+                'subject' => 'required|string'
+            ]);
+
+            $subject = $request->input('subject');
+            $levels = SubjectLevel::getLevelsForSubject($subject);
+
+            return response()->json([
+                'success' => true,
+                'levels' => $levels
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting subject levels: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to load subject levels: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get the next level for a student's current level
+     */
+    public function getNextLevel(Request $request)
+    {
+        try {
+            $request->validate([
+                'subject' => 'required|string',
+                'current_level' => 'required|string'
+            ]);
+
+            $subject = $request->input('subject');
+            $currentLevel = $request->input('current_level');
+
+            $nextLevel = SubjectLevel::getNextLevel($subject, $currentLevel);
+
+            return response()->json([
+                'success' => true,
+                'next_level' => $nextLevel,
+                'has_next_level' => $nextLevel !== null
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting next level: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to get next level: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -148,7 +210,6 @@ class StudentProgressController extends Controller
         }
     }
 
-    // Rest of your methods remain the same...
     public function setupStudentData()
     {
         try {
@@ -179,7 +240,7 @@ class StudentProgressController extends Controller
         }
     }
 
-    public function updateLastCompletedPage(Request $request)
+  public function updateLastCompletedPage(Request $request)
     {
         try {
             $request->validate([
@@ -190,13 +251,47 @@ class StudentProgressController extends Controller
                 'last_completed_page' => 'required|integer|min:0'
             ]);
 
+            $studentName = $request->input('student_name');
+            $subject = $request->input('subject');
+            $month = $request->input('month');
+            $date = $request->input('date');
+            $newPage = $request->input('last_completed_page');
+
+            $nameParts = explode(' ', trim($studentName), 2);
+        $firstName = $nameParts[0];
+        $lastName = $nameParts[1] ?? '';
+
+            // Get old value for logging
+            $lessonPlan = LessonPlan::where([
+                'student_first_name' => $firstName,
+                'student_last_name' => $lastName,
+                'subject' => $subject,
+                'month' => $month,
+                'date' => $date
+            ])->first();
+
+            $oldPage = $lessonPlan ? $lessonPlan->last_completed_page : 0;
+
             $result = $this->lessonPlanService->updateLastCompletedPage(
-                $request->input('student_name'),
-                $request->input('subject'),
-                $request->input('month'),
-                $request->input('date'),
-                $request->input('last_completed_page')
+                $studentName,
+                $subject,
+                $month,
+                $date,
+                $newPage
             );
+
+            // Log the activity
+            if ($result['success']) {
+                $this->logLessonPlanActivity(
+                    'update_last_completed_page',
+                    $studentName,
+                    $subject,
+                    $month,
+                    $date,
+                    ['last_completed_page' => $oldPage],
+                    ['last_completed_page' => $newPage]
+                );
+            }
 
             return response()->json($result);
 
@@ -209,7 +304,7 @@ class StudentProgressController extends Controller
         }
     }
 
-    public function updateLevel(Request $request)
+  public function updateLevel(Request $request)
     {
         try {
             $request->validate([
@@ -220,13 +315,46 @@ class StudentProgressController extends Controller
                 'new_level' => 'required|string'
             ]);
 
+            $studentName = $request->input('student_name');
+            $subject = $request->input('subject');
+            $month = $request->input('month');
+            $date = $request->input('date');
+            $newLevel = $request->input('new_level');
+            
+                        $nameParts = explode(' ', trim($studentName), 2);
+        $firstName = $nameParts[0];
+        $lastName = $nameParts[1] ?? '';
+            // Get old value for logging
+            $lessonPlan = LessonPlan::where([
+                'student_first_name' => $firstName,
+                'student_last_name' => $lastName,
+                'subject' => $subject,
+                'month' => $month,
+                'date' => $date
+            ])->first();
+
+            $oldLevel = $lessonPlan ? $lessonPlan->level : 'unknown';
+
             $result = $this->lessonPlanService->updateLevel(
-                $request->input('student_name'),
-                $request->input('subject'),
-                $request->input('month'),
-                $request->input('date'),
-                $request->input('new_level')
+                $studentName,
+                $subject,
+                $month,
+                $date,
+                $newLevel
             );
+
+            // Log the activity
+            if ($result['success']) {
+                $this->logLessonPlanActivity(
+                    'update_level',
+                    $studentName,
+                    $subject,
+                    $month,
+                    $date,
+                    ['level' => $oldLevel],
+                    ['level' => $newLevel]
+                );
+            }
 
             return response()->json($result);
 
@@ -239,7 +367,7 @@ class StudentProgressController extends Controller
         }
     }
 
-    public function updateRepeats(Request $request)
+   public function updateRepeats(Request $request)
     {
         try {
             $request->validate([
@@ -247,16 +375,42 @@ class StudentProgressController extends Controller
                 'subject' => 'required|string',
                 'month' => 'required|string',
                 'date' => 'required|integer',
-                'repeats' => 'required|integer|min:-1'
+                'pages' => 'required|integer|min:1',
+                'repeats' => 'required|integer|min:0'
             ]);
 
+            $studentName = $request->input('student_name');
+            $subject = $request->input('subject');
+            $month = $request->input('month');
+            $date = $request->input('date');
+            $pages = $request->input('pages');
+            $newRepeats = $request->input('repeats');
+
+            // Get old value for logging - you'll need to implement this in your service
+            // For now, we'll assume 0 as old value if not found
+            $oldRepeats = 0; // You can enhance this by getting the actual old value
+
             $result = $this->lessonPlanService->updateRepeats(
-                $request->input('student_name'),
-                $request->input('subject'),
-                $request->input('month'),
-                $request->input('date'),
-                $request->input('repeats')
+                $studentName,
+                $subject,
+                $month,
+                $date,
+                $pages,
+                $newRepeats
             );
+
+            // Log the activity
+            if ($result['success']) {
+                $this->logLessonPlanActivity(
+                    'update_repeats',
+                    $studentName,
+                    $subject,
+                    $month,
+                    $date,
+                    ['repeats' => $oldRepeats, 'pages' => $pages],
+                    ['repeats' => $newRepeats, 'pages' => $pages]
+                );
+            }
 
             return response()->json($result);
 
@@ -269,7 +423,7 @@ class StudentProgressController extends Controller
         }
     }
 
-    public function deleteStudentData(Request $request)
+  public function deleteStudentData(Request $request)
     {
         try {
             $request->validate([
@@ -278,13 +432,34 @@ class StudentProgressController extends Controller
                 'month' => 'required|string',
                 'year' => 'required|integer'
             ]);
-             Log::info("g:".$request->input('student_name'));
+            
+            $studentName = $request->input('student_name');
+            $subject = $request->input('subject');
+            $month = $request->input('month');
+            $year = $request->input('year');
+            
+            Log::info("g:".$studentName);
+            
             $result = $this->lessonPlanService->deleteStudentData(
-                $request->input('student_name'),
-                $request->input('subject'),
-                $request->input('month'),
-                $request->input('year')
+                $studentName,
+                $subject,
+                $month,
+                $year
             );
+
+            // Log the activity
+            if ($result['success']) {
+                $this->logLessonPlanActivity(
+                    'delete_student_data',
+                    $studentName,
+                    $subject,
+                    $month,
+                    null, // no specific date
+                    ['month' => $month, 'year' => $year],
+                    [],
+                    "Deleted all data for {$studentName} ({$subject}) for {$month} {$year}"
+                );
+            }
 
             return response()->json($result);
 
@@ -293,6 +468,29 @@ class StudentProgressController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Failed to delete student data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function generateCurrentMonth(Request $r)
+    {
+        try {
+            $month=$r->get("month");
+            $year=$r->get("year");
+
+            $result = $this->lessonPlanService->generateCurrentMonthLessonPlans($month,$year);
+            
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['message'] ?? null,
+                'error' => $result['error'] ?? null
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error generating current month lesson plans: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Error generating current month lesson plans: ' . $e->getMessage()
             ], 500);
         }
     }

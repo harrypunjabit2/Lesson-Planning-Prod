@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentConfig;
 use App\Models\NewConcept;
+use App\Models\LessonPlan;
+use App\Traits\LogsUserActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
 class AdminController extends Controller
 {
+    use LogsUserActivity;
     public function setupPage()
     {
         return view('admin.setup');
@@ -29,33 +32,6 @@ class AdminController extends Controller
         return view('admin.config', compact('configs'));
     }
 
-    public function storeConfig(Request $request)
-    {
-        try {
-            $request->validate([
-                'student_first_name' => 'required|string|max:255',
-                'student_last_name' => 'nullable|string|max:255',
-                'subject' => 'required|string|max:255',
-                'class_day_1' => 'nullable|string|max:255',
-                'class_day_2' => 'nullable|string|max:255',
-                'pattern' => 'required|string|max:255',
-                'level' => 'required|string|max:255',
-                'month' => 'required|string|max:255',
-                'year' => 'required|integer|min:2020|max:2030'
-            ]);
-
-            StudentConfig::create($request->all());
-
-            return redirect()->route('admin.config')
-                ->with('success', 'Student configuration added successfully');
-
-        } catch (\Exception $e) {
-            Log::error('Error storing config: ' . $e->getMessage());
-            return redirect()->back()
-                ->with('error', 'Failed to add configuration: ' . $e->getMessage())
-                ->withInput();
-        }
-    }
 
     public function uploadConfigCsv(Request $request)
     {
@@ -156,7 +132,208 @@ class AdminController extends Controller
         }
     }
 
-    public function updateConfig(Request $request, StudentConfig $config)
+public function updateConfig(Request $request, StudentConfig $config)
+    {
+        DB::beginTransaction();
+        try {
+            $request->validate([
+                'student_first_name' => 'required|string|max:255',
+                'student_last_name' => 'nullable|string|max:255',
+                'subject' => 'required|string|max:255',
+                'class_day_1' => 'nullable|string|max:255',
+                'class_day_2' => 'nullable|string|max:255',
+                'pattern' => 'required|string|max:255',
+                'level' => 'required|string|max:255',
+                'month' => 'required|string|max:255',
+                'year' => 'required|integer|min:2020|max:2030'
+            ]);
+
+            // Store old values for logging
+            $oldValues = [
+                'student_first_name' => $config->student_first_name,
+                'student_last_name' => $config->student_last_name,
+                'subject' => $config->subject,
+                'class_day_1' => $config->class_day_1,
+                'class_day_2' => $config->class_day_2,
+                'pattern' => $config->pattern,
+                'level' => $config->level,
+                'month' => $config->month,
+                'year' => $config->year
+            ];
+
+            $newValues = $request->only([
+                'student_first_name',
+                'student_last_name',
+                'subject',
+                'class_day_1',
+                'class_day_2',
+                'pattern',
+                'level',
+                'month',
+                'year'
+            ]);
+
+            // Check if class days changed
+            $classDaysChanged = (
+                $oldValues['class_day_1'] !== $newValues['class_day_1'] ||
+                $oldValues['class_day_2'] !== $newValues['class_day_2']
+            );
+
+            // Update the configuration
+            $config->update($newValues);
+
+            // If class days changed, update lesson plans
+            if ($classDaysChanged) {
+                $this->updateLessonPlansClassDays(
+                    $config->student_first_name,
+                    $config->student_last_name,
+                    $config->subject,
+                    $config->month,
+                    $config->year,
+                    $newValues['class_day_1'] ?? null,
+                    $newValues['class_day_2'] ?? null
+                );
+            }
+
+            // Log the activity
+            $this->logActivity(
+                'update_student_config',
+                'student_config',
+                $config->id,
+                $oldValues,
+                $newValues,
+                "Updated configuration for {$config->student_first_name} {$config->student_last_name} - {$config->subject} ({$config->month} {$config->year})"
+            );
+
+            DB::commit();
+
+            $message = 'Student configuration updated successfully';
+            if ($classDaysChanged) {
+                $message .= ' and lesson plan class days updated';
+            }
+
+            return redirect()->route('admin.config')
+                ->with('success', $message);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error updating config: ' . $e->getMessage());
+            return redirect()->back()
+                ->with('error', 'Failed to update configuration: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+
+    /**
+     * Update lesson plans with new class days when configuration changes
+     */
+    private function updateLessonPlansClassDays(
+        string $firstName,
+        ?string $lastName,
+        string $subject,
+        string $month,
+        int $year,
+        ?string $classDay1,
+        ?string $classDay2
+    ) {
+        try {
+            Log::info("Updating lesson plan class days for {$firstName} {$lastName} - {$subject} in {$month} {$year}");
+
+            // Get all class dates for the month based on new class days
+            $classDates = $this->getClassDatesForMonth($month, $year, $classDay1, $classDay2);
+            $classDatesSet = array_flip($classDates);
+
+            // Find all lesson plans for this student/subject/month/year
+            $query = LessonPlan::where('student_first_name', $firstName)
+                ->where('subject', $subject)
+                ->where('month', $month)
+                ->where('year', $year);
+
+            if ($lastName) {
+                $query->where('student_last_name', $lastName);
+            }
+
+            $lessonPlans = $query->get();
+
+            if ($lessonPlans->isEmpty()) {
+                Log::info("No lesson plans found to update");
+                return;
+            }
+
+            // Update each lesson plan's is_class_day field
+            $updatedCount = 0;
+            foreach ($lessonPlans as $plan) {
+                $isClassDay = isset($classDatesSet[$plan->date]) ? 'Y' : 'N';
+                
+                if ($plan->is_class_day !== $isClassDay) {
+                    $plan->update(['is_class_day' => $isClassDay]);
+                    $updatedCount++;
+                }
+            }
+
+            Log::info("Updated {$updatedCount} lesson plan entries with new class day settings");
+
+        } catch (\Exception $e) {
+            Log::error("Error updating lesson plan class days: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Get class dates for a specific month based on class days
+     */
+    private function getClassDatesForMonth(string $month, int $year, ?string $classDay1, ?string $classDay2)
+    {
+        $dates = [];
+        
+        if (!$classDay1 && !$classDay2) {
+            return $dates;
+        }
+
+        $monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+
+        $monthNum = array_search($month, $monthNames);
+        if ($monthNum === false) {
+            return $dates;
+        }
+
+        $dayNames = [
+            'Sunday' => 0, 'Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3,
+            'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6
+        ];
+
+        $targetDays = [];
+        if ($classDay1 && isset($dayNames[$classDay1])) {
+            $targetDays[] = $dayNames[$classDay1];
+        }
+        if ($classDay2 && isset($dayNames[$classDay2]) && $classDay1 !== $classDay2) {
+            $targetDays[] = $dayNames[$classDay2];
+        }
+
+        if (empty($targetDays)) {
+            return $dates;
+        }
+
+        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $monthNum + 1, $year);
+
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $date = mktime(0, 0, 0, $monthNum + 1, $day, $year);
+            $dayOfWeek = date('w', $date);
+            
+            if (in_array($dayOfWeek, $targetDays)) {
+                $dates[] = $day;
+            }
+        }
+
+        return $dates;
+    }
+
+    // Add logging to other admin methods as well
+
+    public function storeConfig(Request $request)
     {
         try {
             $request->validate([
@@ -171,15 +348,25 @@ class AdminController extends Controller
                 'year' => 'required|integer|min:2020|max:2030'
             ]);
 
-            $config->update($request->all());
+            $config = StudentConfig::create($request->all());
+
+            // Log the activity
+            $this->logActivity(
+                'create_student_config',
+                'student_config',
+                $config->id,
+                [],
+                $request->all(),
+                "Created new configuration for {$config->student_first_name} {$config->student_last_name} - {$config->subject} ({$config->month} {$config->year})"
+            );
 
             return redirect()->route('admin.config')
-                ->with('success', 'Student configuration updated successfully');
+                ->with('success', 'Student configuration created successfully');
 
         } catch (\Exception $e) {
-            Log::error('Error updating config: ' . $e->getMessage());
+            Log::error('Error creating config: ' . $e->getMessage());
             return redirect()->back()
-                ->with('error', 'Failed to update configuration: ' . $e->getMessage())
+                ->with('error', 'Failed to create configuration: ' . $e->getMessage())
                 ->withInput();
         }
     }
@@ -187,7 +374,25 @@ class AdminController extends Controller
     public function destroyConfig(StudentConfig $config)
     {
         try {
+            $configData = [
+                'student_first_name' => $config->student_first_name,
+                'student_last_name' => $config->student_last_name,
+                'subject' => $config->subject,
+                'month' => $config->month,
+                'year' => $config->year
+            ];
+
             $config->delete();
+
+            // Log the activity
+            $this->logActivity(
+                'delete_student_config',
+                'student_config',
+                null,
+                $configData,
+                [],
+                "Deleted configuration for {$configData['student_first_name']} {$configData['student_last_name']} - {$configData['subject']} ({$configData['month']} {$configData['year']})"
+            );
 
             return redirect()->route('admin.config')
                 ->with('success', 'Student configuration deleted successfully');
@@ -198,6 +403,7 @@ class AdminController extends Controller
                 ->with('error', 'Failed to delete configuration: ' . $e->getMessage());
         }
     }
+
 
     public function conceptsIndex()
     {
@@ -362,4 +568,6 @@ class AdminController extends Controller
                 ->with('error', 'Failed to delete concept: ' . $e->getMessage());
         }
     }
+
+    
 }
