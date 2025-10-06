@@ -47,7 +47,7 @@ class StudentConfigService
                 $fullStudentName = trim($studentConfig->student_first_name . ' ' . $studentConfig->student_last_name);
 
                 // Get new concepts for this level and subject
-                $newConceptsWorksheets = NewConcept::where('level', $studentConfig->level)
+               /* $newConceptsWorksheets = NewConcept::where('level', $studentConfig->level)
                     ->where('subject', $studentConfig->subject)
                     ->where('is_new_concept', 'Y')
                     ->pluck('worksheet')
@@ -55,7 +55,7 @@ class StudentConfigService
                         return LessonPlan::wrapWorksheetNumber($worksheet);
                     })
                     ->toArray();
-
+*/
                 // Get all days in the month
                 $allDaysInMonth = $this->getAllDaysInMonth($studentConfig->month, $studentConfig->year);
 
@@ -93,7 +93,7 @@ class StudentConfigService
                         'month' => $studentConfig->month,
                         'date' => $date,
                         'subject' => $studentConfig->subject,
-                        'level' => $studentConfig->level,
+                        'level' => "",
                         'worksheet' => 0,
                         'student_first_name' => $studentConfig->student_first_name,
                         'student_last_name' => $studentConfig->student_last_name,
@@ -299,7 +299,6 @@ class StudentConfigService
             'student_first_name',
             'student_last_name', 
             'subject',
-            'level',
             'month',
             'year',
             'pattern'
@@ -342,4 +341,17 @@ class StudentConfigService
             'errors' => $errors
         ];
     }
+
+    private function getCurrentLevel(string $firstName, string $lastName, string $subject, string $month, int $year)
+{
+    $plan = LessonPlan::where('student_first_name', $firstName)
+        ->where('student_last_name', $lastName)
+        ->where('subject', $subject)
+        ->where('month', $month)
+        ->where('year', $year)
+        ->orderBy('date', 'desc')
+        ->first();
+    
+    return $plan ? $plan->level : null;
+}
 }

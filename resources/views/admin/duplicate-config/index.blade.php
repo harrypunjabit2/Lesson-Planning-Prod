@@ -82,12 +82,20 @@
     <!-- Pattern Conflicts Section -->
     <div id="patternConflictsSection" class="hidden glass-effect rounded-xl border border-white/10 overflow-hidden">
         <div class="p-6 border-b border-white/10 bg-yellow-900/20">
-            <div>
-                <h3 class="text-lg font-semibold text-white">Pattern Conflicts (Manual Review Required)</h3>
-                <p class="text-sm text-gray-400 mt-1">
-                    These entries have the same student/subject/month/year but different patterns or other fields. 
-                    <span id="conflictCount" class="font-semibold text-yellow-400">0</span> conflicts found. Review and delete manually.
-                </p>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Pattern Conflicts (Manual Review Required)</h3>
+                    <p class="text-sm text-gray-400 mt-1">
+                        These entries have the same student/subject/month/year but different patterns or levels. 
+                        <span id="conflictCount" class="font-semibold text-yellow-400">0</span> conflicts found.
+                    </p>
+                </div>
+                <button id="autoCleanConflictsBtn" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all">
+                    <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    Keep Highest Level Only
+                </button>
             </div>
         </div>
         <div id="conflictsList" class="p-6 space-y-4">
@@ -132,6 +140,10 @@ class DuplicateConfigManager {
 
         document.getElementById('autoDeleteBtn').addEventListener('click', () => {
             this.autoDeleteExactDuplicates();
+        });
+
+        document.getElementById('autoCleanConflictsBtn').addEventListener('click', () => {
+            this.autoCleanConflicts();
         });
     }
 
@@ -328,6 +340,49 @@ class DuplicateConfigManager {
         } catch (error) {
             console.error('Error deleting duplicates:', error);
             showError('Failed to delete duplicates');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async autoCleanConflicts() {
+        if (this.patternConflicts.length === 0) {
+            showError('No pattern conflicts to clean');
+            return;
+        }
+
+        if (!confirm(`This will automatically keep only the HIGHEST level entry for each student and delete all others with lower levels. This will affect ${this.patternConflicts.length} groups. Continue?`)) {
+            return;
+        }
+
+        this.showLoading(true);
+        try {
+            const response = await fetch('/admin/duplicate-config/delete-conflicts-by-level', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    conflicts: this.patternConflicts.map(conflict => ({
+                        subject: conflict.subject,
+                        entries: conflict.entries
+                    }))
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showSuccess(result.message);
+                // Refresh the scan
+                setTimeout(() => this.scanForDuplicates(), 1000);
+            } else {
+                showError(result.error || 'Failed to clean conflicts');
+            }
+        } catch (error) {
+            console.error('Error cleaning conflicts:', error);
+            showError('Failed to clean conflicts');
         } finally {
             this.showLoading(false);
         }

@@ -71,6 +71,7 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/delete-student-data', [StudentProgressController::class, 'deleteStudentData'])->name('delete-student-data');
             Route::get('/api/subject-levels', [StudentProgressController::class, 'getSubjectLevels'])->name('api.subject-levels');
             Route::get('/api/next-level', [StudentProgressController::class, 'getNextLevel'])->name('api.next-level');
+            Route::post('/update-test-day', [StudentProgressController::class, 'updateTestDay'])->name('student-progress.update-test-day');
         });
     });
 
@@ -138,6 +139,7 @@ Route::middleware(['role:admin'])->prefix('duplicate-config')->name('duplicate-c
         Route::get('/find', [DuplicateConfigController::class, 'findDuplicates'])->name('find');
         Route::get('/statistics', [DuplicateConfigController::class, 'getStatistics'])->name('statistics');
         Route::post('/delete-exact', [DuplicateConfigController::class, 'deleteExactDuplicates'])->name('delete-exact');
+        Route::post('/delete-conflicts-by-level', [DuplicateConfigController::class, 'deleteConflictsByHighestLevel'])->name('delete-conflicts-by-level');
         Route::post('/delete-entry', [DuplicateConfigController::class, 'deleteSpecificEntry'])->name('delete-entry');
     });
 

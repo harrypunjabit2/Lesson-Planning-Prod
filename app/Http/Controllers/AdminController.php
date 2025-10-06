@@ -76,14 +76,13 @@ class AdminController extends Controller
                         'class_day_1' => trim($data['class_day_1'] ?? ''),
                         'class_day_2' => trim($data['class_day_2'] ?? ''),
                         'pattern' => trim($data['pattern'] ?? ''),
-                        'level' => trim($data['level'] ?? ''),
                         'month' => trim($data['month'] ?? ''),
                         'year' => (int)($data['year'] ?? date('Y'))
                     ];
 
                     // Validate required fields
                     if (empty($cleanData['student_first_name']) || empty($cleanData['subject']) || 
-                        empty($cleanData['pattern']) || empty($cleanData['level']) || empty($cleanData['month'])) {
+                        empty($cleanData['pattern'])  || empty($cleanData['month'])) {
                         $errors[] = "Row " . ($rowIndex + 2) . ": Missing required fields";
                         $errorCount++;
                         continue;
@@ -143,7 +142,6 @@ public function updateConfig(Request $request, StudentConfig $config)
                 'class_day_1' => 'nullable|string|max:255',
                 'class_day_2' => 'nullable|string|max:255',
                 'pattern' => 'required|string|max:255',
-                'level' => 'required|string|max:255',
                 'month' => 'required|string|max:255',
                 'year' => 'required|integer|min:2020|max:2030'
             ]);
@@ -156,7 +154,6 @@ public function updateConfig(Request $request, StudentConfig $config)
                 'class_day_1' => $config->class_day_1,
                 'class_day_2' => $config->class_day_2,
                 'pattern' => $config->pattern,
-                'level' => $config->level,
                 'month' => $config->month,
                 'year' => $config->year
             ];
@@ -168,7 +165,6 @@ public function updateConfig(Request $request, StudentConfig $config)
                 'class_day_1',
                 'class_day_2',
                 'pattern',
-                'level',
                 'month',
                 'year'
             ]);
@@ -343,7 +339,6 @@ public function updateConfig(Request $request, StudentConfig $config)
                 'class_day_1' => 'nullable|string|max:255',
                 'class_day_2' => 'nullable|string|max:255',
                 'pattern' => 'required|string|max:255',
-                'level' => 'required|string|max:255',
                 'month' => 'required|string|max:255',
                 'year' => 'required|integer|min:2020|max:2030'
             ]);
@@ -540,7 +535,8 @@ public function updateConfig(Request $request, StudentConfig $config)
                 'worksheet' => 'required|integer|min:1',
                 'is_new_concept' => 'required|in:Y,N'
             ]);
-
+            Log::info($request->all());
+            
             $concept->update($request->all());
 
             return redirect()->route('admin.concepts')

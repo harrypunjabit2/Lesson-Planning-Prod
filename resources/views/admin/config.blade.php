@@ -168,15 +168,7 @@
                         @enderror
                     </div>
 
-                    <div>
-                        <label for="level" class="block text-sm font-medium text-gray-300 mb-1">Level *</label>
-                        <input type="text" name="level" id="level" required
-                               class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded text-sm focus:bg-white/15 focus:border-primary transition-all"
-                               value="{{ old('level') }}">
-                        @error('level')
-                            <p class="text-red-400 text-xs mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
+                    
 
                     <div>
                         <label for="month" class="block text-sm font-medium text-gray-300 mb-1">Month *</label>
@@ -233,7 +225,6 @@
                             <th class="px-4 py-3 text-left font-semibold text-gray-300">Subject</th>
                             <th class="px-4 py-3 text-left font-semibold text-gray-300">Class Days</th>
                             <th class="px-4 py-3 text-left font-semibold text-gray-300">Pattern</th>
-                            <th class="px-4 py-3 text-left font-semibold text-gray-300">Level</th>
                             <th class="px-4 py-3 text-left font-semibold text-gray-300">Month</th>
                             <th class="px-4 py-3 text-left font-semibold text-gray-300">Year</th>
                             <th class="px-4 py-3 text-left font-semibold text-gray-300">Actions</th>
@@ -250,7 +241,6 @@
                                 {{ $config->class_day_1 }}{{ $config->class_day_2 ? ', ' . $config->class_day_2 : '' }}
                             </td>
                             <td class="px-4 py-3">{{ $config->pattern }}</td>
-                            <td class="px-4 py-3">{{ $config->level }}</td>
                             <td class="px-4 py-3">{{ $config->month }}</td>
                             <td class="px-4 py-3">{{ $config->year }}</td>
                             <td class="px-4 py-3">
@@ -317,11 +307,6 @@
                                                    class="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-xs">
                                         </div>
                                         <div>
-                                            <label class="block text-xs font-medium text-gray-300 mb-1">Level *</label>
-                                            <input type="text" name="level" required value="{{ $config->level }}"
-                                                   class="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-xs">
-                                        </div>
-                                        <div>
                                             <label class="block text-xs font-medium text-gray-300 mb-1">Month *</label>
                                             <select name="month" required class="w-full px-3 py-2 bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary">
                                                 @foreach(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as $month)
@@ -362,6 +347,7 @@
     </div>
 
     <script>
+  
         function editConfig(id) {
             // Hide the regular row and show the edit form
             document.getElementById('config-row-' + id).classList.add('hidden');

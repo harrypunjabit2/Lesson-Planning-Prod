@@ -700,20 +700,21 @@ function displayLessonPlan(data, period, year) {
             
             <div class="overflow-x-auto max-h-96">
                 <table class="w-full text-xs">
-                    <thead class="bg-gray-800/90 sticky top-0 z-10">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Month</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Date</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Type</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Level</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Worksheet</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">New</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Completed</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Pages/Repeats</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Student</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Subject</th>
-                        </tr>
-                    </thead>
+<thead class="bg-gray-800/90 sticky top-0 z-10">
+    <tr>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Month</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Date</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Type</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Level</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Worksheet</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">New</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Test Day</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Completed</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Pages/Repeats</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Student</th>
+        <th class="px-3 py-3 text-left font-semibold text-gray-300 uppercase">Subject</th>
+    </tr>
+</thead>
                     <tbody>
     `;
     
@@ -730,69 +731,82 @@ function displayLessonPlan(data, period, year) {
         const assignmentType = row.isClassDay === 'Y' ? "CW" : "HW";
         const studentKey = fullName.replace(/\s+/g, '_');
 
-        html += `
-            <tr class="${rowClass} hover:bg-primary/10 transition-colors border-b border-white/5">
-                <td class="px-3 py-3 font-medium">${row.month}</td>
-                <td class="px-3 py-3 font-medium">${row.date}</td>
-                <td class="px-3 py-3">${assignmentType}</td>
-                <td class="px-3 py-3">
-                    <div class="flex items-center gap-2 ${isReadOnly ? 'readonly-mode' : ''}">
-                        <input type="text" 
-                               class="w-20 px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
-                               value="${row.level || ''}"
-                               id="level_${studentKey}_${row.subject}_${row.month}_${row.date}"
-                               ${isReadOnly ? 'disabled readonly' : ''}>
-                        ${!isReadOnly ? `<button class="px-2 py-1 bg-secondary hover:bg-secondary/80 text-white rounded text-xs transition-all" 
-                                onclick="updateLevel('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
-                            Update
-                        </button>` : ''}
-                    </div>
-                </td>
-                <td class="px-3 py-3 font-medium">${row.worksheet}</td>
-                <td class="px-3 py-3"><span class="${newConceptClass}">${row.newConcept}</span></td>
-                <td class="px-3 py-3">
-                    <div class="flex items-center gap-2 ${isReadOnly ? 'readonly-mode' : ''}">
-                        <input type="number" 
-                               class="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
-                               value="${row.lastCompletedPage || ''}"
-                               id="lcp_${studentKey}_${row.subject}_${row.month}_${row.date}"
-                               ${isReadOnly ? 'disabled readonly' : ''}>
-                        ${!isReadOnly ? `<button class="px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded text-xs transition-all" 
-                                onclick="updateLastCompleted('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
-                            Update
-                        </button>` : ''}
-                    </div>
-                </td>
-                <td class="px-3 py-3">
-                    <div class="repeat-controls ${isReadOnly ? 'readonly-mode' : ''}">
-                        <div class="repeat-input-group">
-                            <label>Pages</label>
-                            <input type="number" 
-                                   class="px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
-                                   value="${row.repeatPages || ''}"
-                                   id="pages_${studentKey}_${row.subject}_${row.month}_${row.date}"
-                                   min="0"
-                                   ${isReadOnly ? 'disabled readonly' : ''}>
-                        </div>
-                        <div class="repeat-input-group">
-                            <label>Repeats</label>
-                            <input type="number" 
-                                   class="px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
-                                   value="${row.repeats || ''}"
-                                   id="repeats_${studentKey}_${row.subject}_${row.month}_${row.date}"
-                                   min="0"
-                                   ${isReadOnly ? 'disabled readonly' : ''}>
-                        </div>
-                        ${!isReadOnly ? `<button class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-all" 
-                                onclick="updatePagesAndRepeats('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
-                            Update
-                        </button>` : ''}
-                    </div>
-                </td>
-                <td class="px-3 py-3 font-medium">${fullName}</td>
-                <td class="px-3 py-3 font-medium">${row.subject}</td>
-            </tr>
-        `;
+html += `
+    <tr class="${rowClass} hover:bg-primary/10 transition-colors border-b border-white/5 ${row.isTestDay === 'Y' ? 'bg-yellow-500/10' : ''}">
+        <td class="px-3 py-3 font-medium">${row.month}</td>
+        <td class="px-3 py-3 font-medium">${row.date}</td>
+        <td class="px-3 py-3">${assignmentType}</td>
+        <td class="px-3 py-3">
+            <div class="flex items-center gap-2 ${isReadOnly ? 'readonly-mode' : ''}">
+                <input type="text" 
+                       class="w-20 px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
+                       value="${row.level || ''}"
+                       id="level_${studentKey}_${row.subject}_${row.month}_${row.date}"
+                       ${isReadOnly ? 'disabled readonly' : ''}>
+                ${!isReadOnly ? `<button class="px-2 py-1 bg-secondary hover:bg-secondary/80 text-white rounded text-xs transition-all" 
+                        onclick="updateLevel('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
+                    Update
+                </button>` : ''}
+            </div>
+        </td>
+        <td class="px-3 py-3 font-medium">${row.worksheet}</td>
+        <td class="px-3 py-3"><span class="${newConceptClass}">${row.newConcept}</span></td>
+        <td class="px-3 py-3">
+            <div class="flex items-center gap-2">
+                <label class="flex items-center gap-1 cursor-pointer ${isReadOnly ? 'readonly-mode' : ''}">
+                    <input type="checkbox" 
+                           id="test_${studentKey}_${row.subject}_${row.month}_${row.date}"
+                           ${row.isTestDay === 'Y' ? 'checked' : ''}
+                           ${isReadOnly ? 'disabled' : ''}
+                           onchange="toggleTestDay('${fullName}', '${row.subject}', '${row.month}', ${row.date}, this.checked)"
+                           class="w-4 h-4 accent-yellow-500">
+                    <span class="text-xs ${row.isTestDay === 'Y' ? 'text-yellow-400 font-semibold' : 'text-gray-400'}">Test</span>
+                </label>
+            </div>
+        </td>
+        <td class="px-3 py-3">
+            <div class="flex items-center gap-2 ${isReadOnly ? 'readonly-mode' : ''}">
+                <input type="number" 
+                       class="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
+                       value="${row.lastCompletedPage || ''}"
+                       id="lcp_${studentKey}_${row.subject}_${row.month}_${row.date}"
+                       ${isReadOnly ? 'disabled readonly' : ''}>
+                ${!isReadOnly ? `<button class="px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded text-xs transition-all" 
+                        onclick="updateLastCompleted('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
+                    Update
+                </button>` : ''}
+            </div>
+        </td>
+        <td class="px-3 py-3">
+            <div class="repeat-controls ${isReadOnly ? 'readonly-mode' : ''}">
+                <div class="repeat-input-group">
+                    <label>Pages</label>
+                    <input type="number" 
+                           class="px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
+                           value="${row.repeatPages || ''}"
+                           id="pages_${studentKey}_${row.subject}_${row.month}_${row.date}"
+                           min="0"
+                           ${isReadOnly ? 'disabled readonly' : ''}>
+                </div>
+                <div class="repeat-input-group">
+                    <label>Repeats</label>
+                    <input type="number" 
+                           class="px-2 py-1 bg-white/10 border border-white/20 rounded text-xs" 
+                           value="${row.repeats || ''}"
+                           id="repeats_${studentKey}_${row.subject}_${row.month}_${row.date}"
+                           min="0"
+                           ${isReadOnly ? 'disabled readonly' : ''}>
+                </div>
+                ${!isReadOnly ? `<button class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-all" 
+                        onclick="updatePagesAndRepeats('${fullName}', '${row.subject}', '${row.month}', ${row.date})">
+                    Update
+                </button>` : ''}
+            </div>
+        </td>
+        <td class="px-3 py-3 font-medium">${fullName}</td>
+        <td class="px-3 py-3 font-medium">${row.subject}</td>
+    </tr>
+`;
     });
     
     html += `
@@ -1173,5 +1187,53 @@ window.addEventListener('scroll', function() {
         studentDropdown.style.left = rect.left + 'px';
     }
 });
+
+
+async function toggleTestDay(fullStudentName, subject, month, date, isChecked) {
+    if (!canEdit) {
+        showError('You do not have permission to edit data.');
+        return;
+    }
+    
+    const isTestDay = isChecked ? 'Y' : 'N';
+    
+    showLoading(true, 'Updating test day status...');
+    
+    try {
+        const response = await fetch('/student-progress/update-test-day', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify({
+                student_name: fullStudentName,
+                subject: subject,
+                month: month,
+                date: parseInt(date),
+                is_test_day: isTestDay
+            })
+        });
+        
+        const result = await response.json();
+        showLoading(false);
+        
+        if (result.success) {
+            showSuccess(result.message);
+            setTimeout(() => {
+                loadLessonPlan();
+            }, 1000);
+        } else {
+            showError(result.error);
+            // Revert checkbox state
+            document.getElementById(`test_${fullStudentName.replace(/\s+/g, '_')}_${subject}_${month}_${date}`).checked = !isChecked;
+        }
+    } catch (error) {
+        showLoading(false);
+        showError('Failed to update test day: ' + error.message);
+        // Revert checkbox state
+        document.getElementById(`test_${fullStudentName.replace(/\s+/g, '_')}_${subject}_${month}_${date}`).checked = !isChecked;
+    }
+}
 </script>
 @endpush

@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\StudentConfig;
+use App\Models\SubjectLevel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -123,7 +124,7 @@ class DuplicateConfigController extends Controller
     }
 
     /**
-     * Auto-delete exact duplicates (keep the first one, delete the rest)
+     * Auto-delete exact duplicates (keep the first one by ID, delete all others)
      */
     public function deleteExactDuplicates(Request $request)
     {
@@ -135,18 +136,24 @@ class DuplicateConfigController extends Controller
             ]);
 
             $totalDeleted = 0;
+            $processedGroups = 0;
 
             foreach ($request->input('duplicates') as $duplicate) {
                 $ids = $duplicate['ids'];
                 
-                // Keep the first ID, delete the rest
+                // Ensure IDs are sorted (lowest first)
+                sort($ids);
+                
+                // Keep the first ID (lowest), delete ALL the rest
+                $idToKeep = $ids[0];
                 $idsToDelete = array_slice($ids, 1);
                 
                 if (!empty($idsToDelete)) {
                     $deleted = StudentConfig::whereIn('id', $idsToDelete)->delete();
                     $totalDeleted += $deleted;
+                    $processedGroups++;
                     
-                    Log::info("Deleted exact duplicates: IDs " . implode(', ', $idsToDelete));
+                    Log::info("Kept ID {$idToKeep}, deleted " . count($idsToDelete) . " duplicates: IDs " . implode(', ', $idsToDelete));
                 }
             }
 
@@ -154,8 +161,9 @@ class DuplicateConfigController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Successfully deleted {$totalDeleted} duplicate entries",
-                'deleted_count' => $totalDeleted
+                'message' => "Successfully deleted {$totalDeleted} duplicate entries from {$processedGroups} groups. Kept the first entry of each group.",
+                'deleted_count' => $totalDeleted,
+                'groups_processed' => $processedGroups
             ]);
 
         } catch (\Exception $e) {
@@ -211,6 +219,103 @@ class DuplicateConfigController extends Controller
     }
 
     /**
+     * Auto-delete pattern conflicts by keeping only the highest level
+     */
+    public function deleteConflictsByHighestLevel(Request $request)
+    {
+        DB::beginTransaction();
+        try {
+            $request->validate([
+                'conflicts' => 'required|array',
+                'conflicts.*.entries' => 'required|array'
+            ]);
+
+            $totalDeleted = 0;
+            $processedGroups = 0;
+
+            foreach ($request->input('conflicts') as $conflict) {
+                $entries = $conflict['entries'];
+                $subject = $conflict['subject'] ?? null;
+                
+                Log::info("Processing conflict - Subject: {$subject}, Entries: " . count($entries));
+                
+                if (!$subject || count($entries) < 2) {
+                    Log::warning("Skipping conflict - Subject: {$subject}, Entry count: " . count($entries));
+                    continue;
+                }
+
+                // Get all levels and find the highest one
+                $levels = array_column($entries, 'level');
+                $ids = array_column($entries, 'id');
+                
+                Log::info("Levels found: " . implode(', ', $levels));
+
+                // Query subject_levels to find which level has the highest ID (highest level)
+                $highestLevelRecord = SubjectLevel::where('subject', $subject)
+                    ->whereIn('level', $levels)
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                if (!$highestLevelRecord) {
+                    Log::warning("No matching level found in subject_levels for subject: {$subject}, levels: " . implode(', ', $levels));
+                    continue;
+                }
+
+                $highestLevel = $highestLevelRecord->level;
+                Log::info("Highest level identified: {$highestLevel} (ID: {$highestLevelRecord->id})");
+
+                // Find IDs to keep (those with highest level)
+                $idsToKeep = [];
+                $idsToDelete = [];
+
+                foreach ($entries as $entry) {
+                    if ($entry['level'] === $highestLevel) {
+                        $idsToKeep[] = $entry['id'];
+                    } else {
+                        $idsToDelete[] = $entry['id'];
+                    }
+                }
+
+                Log::info("IDs to keep (highest level): " . implode(', ', $idsToKeep));
+                Log::info("IDs to delete (lower levels): " . implode(', ', $idsToDelete));
+
+                // Keep only ONE of the highest level entries, delete the rest
+                if (count($idsToKeep) > 1) {
+                    sort($idsToKeep);
+                    $keepOne = array_shift($idsToKeep);
+                    $idsToDelete = array_merge($idsToDelete, $idsToKeep);
+                    Log::info("Multiple highest level entries found. Keeping ID: {$keepOne}, adding extras to delete list");
+                }
+
+                if (!empty($idsToDelete)) {
+                    $deleted = StudentConfig::whereIn('id', $idsToDelete)->delete();
+                    $totalDeleted += $deleted;
+                    $processedGroups++;
+                    
+                    Log::info("Successfully deleted {$deleted} entries for subject {$subject}. Kept highest level ({$highestLevel}) entry.");
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully deleted {$totalDeleted} entries with lower levels from {$processedGroups} groups. Kept only the highest level entry for each.",
+                'deleted_count' => $totalDeleted,
+                'groups_processed' => $processedGroups
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error deleting conflicts by highest level: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to delete conflicts: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get statistics about duplicates
      */
     public function getStatistics()
@@ -232,7 +337,7 @@ class DuplicateConfigController extends Controller
 
             $totalDuplicateRecords = 0;
             foreach ($duplicateGroups as $group) {
-                $totalDuplicateRecords += ($group->count - 1); // Count extras, not the originals
+                $totalDuplicateRecords += ($group->count - 1);
             }
 
             return response()->json([

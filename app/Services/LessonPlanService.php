@@ -41,20 +41,44 @@ class LessonPlanService
             Log::info("Worksheet wrapping detected: {$previousWorksheet} -> {$currentWorksheet} for {$studentFirstName} {$studentLastName}");
             
             // Get current student configuration to find current level
-            $studentConfig = StudentConfig::where('student_first_name', $studentFirstName)
-                ->where('student_last_name', $studentLastName)
-                ->where('subject', $subject)
-                ->where('month', $month)
-                ->where('year', $year)
-                ->first();
-            
-            if (!$studentConfig) {
-                Log::warning("Student configuration not found for level progression");
-                return;
-            }
-            
-            $currentLevel = $studentConfig->level;
+           // Get current month and year
+$currentMonth = now()->format('F'); // e.g., "January"
+$currentYear = now()->year;
+
+// If the provided month is not the current month, get previous month
+if ($month !== $currentMonth) {
+    $monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    $monthIndex = array_search($month, $monthNames);
+    if ($monthIndex === false) {
+        Log::warning("Invalid month: {$month}");
+        $currentLevel = null;
+    } else {
+        $previousMonthIndex = $monthIndex - 1;
+        $previousYear = $year;
+        
+        // Handle year transition
+        if ($previousMonthIndex < 0) {
+            $previousMonthIndex = 11; // December
+            $previousYear = $year - 1;
+        }
+        
+        $previousMonth = $monthNames[$previousMonthIndex];
+        $currentLevel = $this->getCurrentLevel($studentFirstName, $studentLastName, $subject, $previousMonth, $previousYear);
+    }
+} else {
+    // Month matches current month, use as-is
+    $currentLevel = $this->getCurrentLevel($studentFirstName, $studentLastName, $subject, $month, $year);
+}
+
             $nextLevel = SubjectLevel::getNextLevel($subject, $currentLevel);
+            if($nextLevel==null)
+            {
+                $nextLevel="";
+            }
             
             if (!$nextLevel) {
                 Log::info("No next level found for {$subject} after {$currentLevel} - student is at maximum level");
@@ -91,13 +115,13 @@ class LessonPlanService
         DB::beginTransaction();
         try {
             // Update StudentConfig
-            StudentConfig::where('student_first_name', $studentFirstName)
+         /*   StudentConfig::where('student_first_name', $studentFirstName)
                 ->where('student_last_name', $studentLastName)
                 ->where('subject', $subject)
                 ->where('month', $month)
                 ->where('year', $year)
                 ->update(['level' => $newLevel]);
-            
+           */ 
             // Get new concepts for the new level
             $newConceptsWorksheets = NewConcept::where('level', $newLevel)
                 ->where('subject', $subject)
@@ -188,7 +212,7 @@ class LessonPlanService
             $configQuery->where('month', $month);
         }
         
-        $configQuery->update(['level' => $newLevel]);
+       // $configQuery->update(['level' => $newLevel]);
         
         // Update LessonPlan entries
         $planQuery = LessonPlan::where('student_first_name', $studentFirstName)
@@ -587,6 +611,17 @@ public function generateCurrentMonthLessonPlans($month, $year)
                     $currentYear
                 );
                 
+                // Get level from previous month's last lesson plan, not from config
+$level = $this->getCurrentLevel(
+    $config->student_first_name, 
+    $config->student_last_name, 
+    $config->subject,
+    $month,
+    $year
+) ?? $this->getPreviousMonthLevel($config->student_first_name, $config->student_last_name, $config->subject, $month, $year);
+
+// Use this level instead of $config->level
+$config->level=$level;
                 Log::info("Starting worksheet calculated based on pattern: {$startingWorksheet}");
                 
                 // Generate lesson plans for this student/subject
@@ -642,11 +677,11 @@ private function ensureStudentConfigsExist($targetMonth, $targetYear)
             ->where('year', $targetYear)
             ->count();
         
-            /*
+            
         if ($existingConfigs > 0) {
             Log::info("Student configurations already exist for {$targetMonth} {$targetYear}");
             return;
-        }*/
+        }
         
         Log::info("No configurations found for {$targetMonth} {$targetYear}, attempting to replicate from previous month");
         
@@ -690,6 +725,15 @@ private function ensureStudentConfigsExist($targetMonth, $targetYear)
         
         // Prepare data for batch insert using your specified format
         foreach ($previousConfigs as $config) {
+            $cc=StudentConfig::where('month', $targetMonth)
+            ->where('year', $targetYear)->where('student_first_name',$config->student_first_name)
+            ->where('student_last_name',$config->student_last_name)
+            ->where('subject',$config->subject)
+            ->first();
+            if(isset($cc))
+            {
+                continue;
+            }
             $cleanData = [
                 'student_first_name' => trim($config->student_first_name ?? ''),
                 'student_last_name' => trim($config->student_last_name ?? ''),
@@ -697,7 +741,7 @@ private function ensureStudentConfigsExist($targetMonth, $targetYear)
                 'class_day_1' => trim($config->class_day_1 ?? ''),
                 'class_day_2' => trim($config->class_day_2 ?? ''),
                 'pattern' => trim($config->pattern ?? ''),
-                'level' => trim($config->level ?? ''),
+        //        'level' => trim($config->level ?? ''),
                 'month' => trim($targetMonth),
                 'year' => (int)$targetYear,
                 'created_at' => now(),
@@ -825,7 +869,8 @@ private function ensureStudentConfigsExist($targetMonth, $targetYear)
                 'repeatPages'=>$row->repeat_pages,
                 'newConcept' => $row->new_concept,
                 'isClassDay' => $row->is_class_day,
-                'year' => $row->year
+                'year' => $row->year,
+                'isTestDay' => $row->is_test_day,
             ];
         })->toArray();
     }
@@ -1115,7 +1160,7 @@ private function recalculateAllFutureDates(
                 ->orderBy('year')
                 ->orderBy('month')
                 ->orderBy('date');
-
+/*
                 StudentConfig::where('student_first_name', $firstName)
                 ->where('student_last_name',$lastName)
                 ->where('subject', $subject)
@@ -1123,7 +1168,7 @@ private function recalculateAllFutureDates(
                 ->where('month',$month)
                 ->update(["level"=>$newLevel]);
                 
-
+*/
             if ($lastName) {
                 $query->where('student_last_name', $lastName);
             }
@@ -1541,7 +1586,7 @@ private function recalculateAllFutureDates(
         // the complex logic for continuing patterns across months
     }
 
-    private function getNextWorksheetForNewMonth($firstName, $lastName, $subject, $currentMonth, $currentYear)
+ private function getNextWorksheetForNewMonth($firstName, $lastName, $subject, $currentMonth, $currentYear)
 {
     // Get previous month
     $currentMonthNum = array_search($currentMonth, [
@@ -1551,15 +1596,14 @@ private function recalculateAllFutureDates(
     
     if ($currentMonthNum === false) {
         Log::warning("Invalid current month: {$currentMonth}");
-        return 1; // Default to worksheet 1
+        return 1;
     }
     
     $previousMonthNum = $currentMonthNum - 1;
     $previousYear = $currentYear;
     
-    // Handle year transition
     if ($previousMonthNum < 0) {
-        $previousMonthNum = 11; // December
+        $previousMonthNum = 11;
         $previousYear = $currentYear - 1;
     }
     
@@ -1568,21 +1612,22 @@ private function recalculateAllFutureDates(
     
     Log::info("Looking for previous month data: {$previousMonth} {$previousYear}");
     
-    // Find the last lesson plan entry from previous month
-    $lastEntry = LessonPlan::where('student_first_name', $firstName)
+    // Get the last TWO entries from previous month to determine which pattern increment was used
+    $lastEntries = LessonPlan::where('student_first_name', $firstName)
         ->where('student_last_name', $lastName)
         ->where('subject', $subject)
         ->where('month', $previousMonth)
         ->where('year', $previousYear)
         ->orderBy('date', 'desc')
-        ->first();
+        ->limit(2)
+        ->get();
     
-    if (!$lastEntry || $lastEntry->worksheet <= 0) {
+    if ($lastEntries->isEmpty() || $lastEntries->first()->worksheet <= 0) {
         Log::info("No previous month data found, starting with worksheet 1");
-        return 1; // Default starting point
+        return 1;
     }
 
-    // Get the student's pattern to calculate the next worksheet
+    // Get the student's pattern
     $studentConfig = StudentConfig::where('student_first_name', $firstName)
         ->where('student_last_name', $lastName)
         ->where('subject', $subject)
@@ -1592,24 +1637,41 @@ private function recalculateAllFutureDates(
 
     if (!$studentConfig) {
         Log::warning("No student config found for pattern calculation");
-        return $lastEntry->worksheet + 1; // Simple increment as fallback
+        return $lastEntries->first()->worksheet + 1;
     }
 
-    // Parse the pattern
     $patternValues = array_map('intval', explode(':', $studentConfig->pattern));
     
-    // Count the number of days in the previous month to determine pattern position
-    $daysInPrevMonth = cal_days_in_month(CAL_GREGORIAN, $previousMonthNum + 1, $previousYear);
+    if (count($lastEntries) >= 2) {
+        // Calculate which increment was used for the last entry
+        $lastWorksheet = $lastEntries->first()->worksheet;
+        $secondLastWorksheet = $lastEntries->last()->worksheet;
+        
+        // Calculate the increment that was used
+        $lastIncrement = $lastWorksheet - $secondLastWorksheet;
+        if ($lastIncrement <= 0) {
+            $lastIncrement = ($lastWorksheet + 200) - $secondLastWorksheet; // Handle wrapping
+        }
+        
+        // Find which pattern index was used
+        $lastPatternIndex = array_search($lastIncrement, $patternValues);
+        
+        if ($lastPatternIndex !== false) {
+            // Use the NEXT pattern increment
+            $nextPatternIndex = ($lastPatternIndex + 1) % count($patternValues);
+            $nextIncrement = $patternValues[$nextPatternIndex];
+            
+            $nextWorksheet = LessonPlan::wrapWorksheetNumber($lastWorksheet + $nextIncrement);
+            
+            Log::info("Last increment was {$lastIncrement} (pattern index {$lastPatternIndex}), next increment is {$nextIncrement}, starting new month with worksheet {$nextWorksheet}");
+            
+            return $nextWorksheet;
+        }
+    }
     
-    // The pattern index for the first day of new month
-    // We need to continue the pattern from where it left off
-    $patternIndex = ($daysInPrevMonth - 1) % count($patternValues);
-    $increment = $patternValues[$patternIndex];
-    
-    // Calculate the next worksheet
-    $nextWorksheet = LessonPlan::wrapWorksheetNumber($lastEntry->worksheet + $increment);
-    
-    Log::info("Previous month ended at worksheet {$lastEntry->worksheet}, pattern increment is {$increment}, starting new month with worksheet {$nextWorksheet}");
+    // Fallback: if we can't determine the pattern, use first pattern value
+    $nextWorksheet = LessonPlan::wrapWorksheetNumber($lastEntries->first()->worksheet + $patternValues[0]);
+    Log::info("Could not determine pattern position, using first pattern value. Starting with worksheet {$nextWorksheet}");
     
     return $nextWorksheet;
 }
@@ -1954,6 +2016,279 @@ private function isWithinRepeatRange(int $startWorksheet, int $currentWorksheet,
         // Wrapping case (e.g., start at 195, current at 5)
         $distance = (200 - $startWorksheet + 1) + $currentWorksheet;
         return $distance <= $repeatPages;
+    }
+}
+
+  private function getCurrentLevel(string $firstName, string $lastName, string $subject, string $month, int $year)
+{
+    $plan = LessonPlan::where('student_first_name', $firstName)
+        ->where('student_last_name', $lastName)
+        ->where('subject', $subject)
+        ->where('month', $month)
+        ->where('year', $year)
+        ->orderBy('date', 'desc')
+        ->first();
+    
+    return $plan ? $plan->level : null;
+}
+
+/**
+ * Get level from previous month's last lesson plan
+ */
+private function getPreviousMonthLevel(string $firstName, string $lastName, string $subject, string $currentMonth, int $currentYear)
+{
+    $monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    $currentMonthIndex = array_search($currentMonth, $monthNames);
+    if ($currentMonthIndex === false) return null;
+    
+    $previousMonthIndex = $currentMonthIndex - 1;
+    $previousYear = $currentYear;
+    
+    if ($previousMonthIndex < 0) {
+        $previousMonthIndex = 11;
+        $previousYear = $currentYear - 1;
+    }
+    
+    $previousMonth = $monthNames[$previousMonthIndex];
+    
+    $lastPlan = LessonPlan::where('student_first_name', $firstName)
+        ->where('student_last_name', $lastName)
+        ->where('subject', $subject)
+        ->where('month', $previousMonth)
+        ->where('year', $previousYear)
+        ->orderBy('date', 'desc')
+        ->first();
+    
+    return $lastPlan ? $lastPlan->level : null;
+}
+
+public function updateTestDay(string $studentName, string $subject, string $month, int $date, string $isTestDay)
+{
+    DB::beginTransaction();
+    try {
+        $year = now()->year;
+        
+        if ($this->isMonthInPast($month, $year)) {
+            return [
+                'success' => false,
+                'error' => "Cannot edit data for {$month} - this month has already passed"
+            ];
+        }
+
+        $nameParts = explode(' ', trim($studentName), 2);
+        $firstName = $nameParts[0];
+        $lastName = $nameParts[1] ?? '';
+
+        // Find the specific entry
+        $query = LessonPlan::where('student_first_name', $firstName)
+            ->where('subject', $subject)
+            ->where('month', $month)
+            ->where('date', $date)
+            ->where('year', $year);
+
+        if ($lastName) {
+            $query->where('student_last_name', $lastName);
+        }
+
+        $entry = $query->first();
+
+        if (!$entry) {
+            return ['success' => false, 'error' => 'Lesson plan entry not found'];
+        }
+
+        // Update test day status
+        $entry->update(['is_test_day' => $isTestDay]);
+
+        // If marking as test day, shift all future worksheets down by 1
+        if ($isTestDay === 'Y') {
+            $this->shiftWorksheetsForTestDay($firstName, $lastName, $subject, $month, $year, $date);
+        } else {
+            // If unmarking, recalculate from this point
+            $this->recalculateAllFutureDates($firstName, $lastName, $subject, $month, $year, $date, $entry->worksheet);
+        }
+
+        DB::commit();
+
+        return [
+            'success' => true,
+            'message' => $isTestDay === 'Y' ? 'Test day marked and worksheets adjusted' : 'Test day unmarked and worksheets recalculated'
+        ];
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error updating test day: ' . $e->getMessage());
+        return ['success' => false, 'error' => 'Error updating test day: ' . $e->getMessage()];
+    }
+}
+
+private function shiftWorksheetsForTestDay($firstName, $lastName, $subject, $month, $year, $testDate)
+{
+    try {
+        // Get the test day entry
+        $testEntry = LessonPlan::where('student_first_name', $firstName)
+            ->where('student_last_name', $lastName)
+            ->where('subject', $subject)
+            ->where('year', $year)
+            ->where('month', $month)
+            ->where('date', $testDate)
+            ->first();
+
+        if (!$testEntry) {
+            return;
+        }
+
+        // Get the entry BEFORE the test date to find the last real worksheet
+        $beforeTestEntry = LessonPlan::where('student_first_name', $firstName)
+            ->where('student_last_name', $lastName)
+            ->where('subject', $subject)
+            ->where('year', $year)
+            ->where('month', $month)
+            ->where('date', '<', $testDate)
+            ->orderBy('date', 'desc')
+            ->first();
+
+        if (!$beforeTestEntry) {
+            return;
+        }
+
+        // Get student pattern
+        $studentConfig = StudentConfig::where('student_first_name', $firstName)
+            ->where('student_last_name', $lastName)
+            ->where('subject', $subject)
+            ->where('month', $month)
+            ->where('year', $year)
+            ->first();
+
+        if (!$studentConfig) {
+            Log::warning("No student config found for test day calculation");
+            return;
+        }
+
+        $patternValues = array_map('intval', explode(':', $studentConfig->pattern));
+
+        // Find which pattern increment was used to GET TO the test day
+        $beforeTestWorksheet = $beforeTestEntry->worksheet;
+        $testDayWorksheet = $testEntry->worksheet;
+        
+        $usedIncrement = $testDayWorksheet - $beforeTestWorksheet;
+        if ($usedIncrement <= 0) {
+            $usedIncrement = ($testDayWorksheet + 200) - $beforeTestWorksheet;
+        }
+
+        $usedPatternIndex = array_search($usedIncrement, $patternValues);
+        
+        if ($usedPatternIndex === false) {
+            Log::warning("Could not find matching pattern for increment {$usedIncrement}");
+            $usedPatternIndex = 0;
+        }
+
+        Log::info("Test day at worksheet {$testDayWorksheet}, previous was {$beforeTestWorksheet}, used increment: {$usedIncrement}, pattern index: {$usedPatternIndex}");
+
+        $nextPatternIndex = ($usedPatternIndex + 1) % count($patternValues);
+        $startingWorksheet = $beforeTestWorksheet;
+        
+        Log::info("Next pattern index: {$nextPatternIndex}, starting recalculation from worksheet: {$startingWorksheet}");
+
+        // Get ALL entries from test date onwards (current month AND future months)
+        $allEntries = LessonPlan::where('student_first_name', $firstName)
+            ->where('student_last_name', $lastName)
+            ->where('subject', $subject)
+            ->where(function($query) use ($month, $year, $testDate) {
+                $query->where(function($q) use ($month, $year, $testDate) {
+                    // Current month, from test date onwards
+                    $q->where('year', $year)
+                      ->where('month', $month)
+                      ->where('date', '>=', $testDate);
+                })->orWhere(function($q) use ($month, $year) {
+                    // Future months in the same year
+                    $monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                                  'July', 'August', 'September', 'October', 'November', 'December'];
+                    $currentMonthIndex = array_search($month, $monthNames);
+                    $futureMonths = array_slice($monthNames, $currentMonthIndex + 1);
+                    
+                    $q->where('year', $year)
+                      ->whereIn('month', $futureMonths);
+                })->orWhere(function($q) use ($year) {
+                    // All entries in future years
+                    $q->where('year', '>', $year);
+                });
+            })
+            ->orderBy('year')
+            ->orderBy(DB::raw("
+                CASE month 
+                    WHEN 'January' THEN 1 WHEN 'February' THEN 2 WHEN 'March' THEN 3 
+                    WHEN 'April' THEN 4 WHEN 'May' THEN 5 WHEN 'June' THEN 6 
+                    WHEN 'July' THEN 7 WHEN 'August' THEN 8 WHEN 'September' THEN 9 
+                    WHEN 'October' THEN 10 WHEN 'November' THEN 11 WHEN 'December' THEN 12 
+                END
+            "))
+            ->orderBy('date')
+            ->get();
+
+        Log::info("Found {$allEntries->count()} total entries to recalculate (including future months)");
+
+        $currentWorksheet = $startingWorksheet;
+        $patternIndex = $nextPatternIndex;
+
+        foreach ($allEntries as $index => $entry) {
+            if ($entry->is_test_day === 'Y') {
+                // Test day keeps current worksheet, don't increment
+                $entry->worksheet = $currentWorksheet;
+                $entry->save();
+                Log::info("Test day {$entry->month} {$entry->date}: worksheet stays at {$currentWorksheet}");
+            } else {
+                // Normal day: apply pattern increment
+                $increment = $patternValues[$patternIndex];
+                $previousWorksheet = $currentWorksheet;
+                $currentWorksheet += $increment;
+                $currentWorksheet = LessonPlan::wrapWorksheetNumber($currentWorksheet);
+                
+                // Check for level progression
+                if ($previousWorksheet >= 190 && $currentWorksheet <= 10) {
+                    $this->handleLevelProgression(
+                        $previousWorksheet,
+                        $currentWorksheet,
+                        $firstName,
+                        $lastName,
+                        $subject,
+                        $entry->month,
+                        $entry->year,
+                        $entry->date
+                    );
+                }
+                
+                $entry->worksheet = $currentWorksheet;
+                $entry->save();
+                
+                Log::info("{$entry->month} {$entry->date}: +{$increment} = {$currentWorksheet} (pattern index {$patternIndex})");
+                
+                // Move to next pattern position
+                $patternIndex = ($patternIndex + 1) % count($patternValues);
+            }
+            
+            // Update new concept status
+            $newConceptsWorksheets = NewConcept::where('level', $entry->level)
+                ->where('subject', $subject)
+                ->where('is_new_concept', 'Y')
+                ->pluck('worksheet')
+                ->map(function ($worksheet) {
+                    return LessonPlan::wrapWorksheetNumber($worksheet);
+                })
+                ->toArray();
+
+            $entry->new_concept = in_array($currentWorksheet, $newConceptsWorksheets) ? 'Y' : 'N';
+            $entry->save();
+        }
+
+        Log::info("Test day worksheet shifting completed for all future dates");
+
+    } catch (\Exception $e) {
+        Log::error("Error in shiftWorksheetsForTestDay: " . $e->getMessage());
+        throw $e;
     }
 }
 }

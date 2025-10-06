@@ -80,7 +80,7 @@ class User extends Authenticatable
 
     public function canManageConfig(): bool
     {
-        return $this->hasAnyRole([self::ROLE_ADMIN, self::ROLE_PLANNER]);
+        return $this->hasAnyRole([self::ROLE_ADMIN]);
     }
 
     public function isAdmin(): bool

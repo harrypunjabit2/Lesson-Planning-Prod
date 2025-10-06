@@ -31,14 +31,14 @@ class SubjectLevel extends Model
     {
         // Get all levels for this subject ordered by level
         $levels = self::where('subject', $subject)
-            ->orderBy('level')
+            ->orderBy('id')
             ->pluck('level')
             ->toArray();
 
         $currentIndex = array_search($currentLevel, $levels);
         
         if ($currentIndex === false) {
-            return null; // Current level not found
+            return ""; // Current level not found
         }
 
         // Return next level if it exists
@@ -46,7 +46,7 @@ class SubjectLevel extends Model
             return $levels[$currentIndex + 1];
         }
 
-        return null; // Already at highest level
+        return ""; // Already at highest level
     }
 
     /**

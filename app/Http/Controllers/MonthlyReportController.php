@@ -72,9 +72,23 @@ class MonthlyReportController extends Controller
                 }
             }
 
-            // Sort by student name
+            // Sort by student name, then by subject (Math before Reading)
             usort($reportData, function($a, $b) {
-                return strcmp($a['student_name'], $b['student_name']);
+                // First, compare student names
+                $nameComparison = strcmp($a['student_name'], $b['student_name']);
+                
+                if ($nameComparison !== 0) {
+                    return $nameComparison;
+                }
+                
+                // If same student, sort by subject (Math before Reading)
+                // Define subject priority
+                $subjectOrder = ['Math' => 1, 'Reading' => 2];
+                
+                $aOrder = $subjectOrder[$a['subject']] ?? 999;
+                $bOrder = $subjectOrder[$b['subject']] ?? 999;
+                
+                return $aOrder - $bOrder;
             });
 
             return response()->json([
@@ -119,8 +133,10 @@ class MonthlyReportController extends Controller
             $allLevels = $lessonPlans->pluck('level')->unique()->toArray();
             $highestLevel = $this->getHighestLevel($subject, $allLevels);
 
-            // 2. Get highest worksheet number
-            $highestWorksheet = $lessonPlans->max('worksheet');
+            // 2. Get highest worksheet number - from the day when highest level was reached
+            // Find the worksheet number when the student first reached the highest level
+            $highestLevelPlan = $lessonPlans->where('level', $highestLevel)->first();
+            $highestWorksheet = $highestLevelPlan ? $highestLevelPlan->worksheet : $lessonPlans->max('worksheet');
 
             // Skip this student-subject if highest worksheet is 0
             if ($highestWorksheet == 0) {
@@ -191,44 +207,47 @@ class MonthlyReportController extends Controller
     /**
      * Calculate total pages completed based on pattern and days in month
      */
-    private function calculatePagesCompleted($studentConfig, $month, $year)
-    {
-        try {
-            // Parse the pattern (e.g., "4:3:3")
-            $pattern = $studentConfig->pattern;
-            $patternValues = array_map('intval', explode(':', $pattern));
+/**
+ * Calculate total pages completed based on pattern and days in month
+ */
+private function calculatePagesCompleted($studentConfig, $month, $year)
+{
+    try {
+        // Parse the pattern (e.g., "4:3:3")
+        $pattern = $studentConfig->pattern;
+        $patternValues = array_map('intval', explode(':', $pattern));
 
-            if (empty($patternValues)) {
-                return 0;
-            }
-
-            // Get number of days in the month
-            $monthNames = [
-                'January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'
-            ];
-            
-            $monthNum = array_search($month, $monthNames);
-            if ($monthNum === false) {
-                return 0;
-            }
-
-            $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $monthNum + 1, $year);
-
-            // Calculate total pages: sum of pattern values per day
-            $totalPages = 0;
-            for ($day = 0; $day < $daysInMonth; $day++) {
-                $patternIndex = $day % count($patternValues);
-                $totalPages += $patternValues[$patternIndex];
-            }
-
-            return $totalPages;
-
-        } catch (\Exception $e) {
-            Log::error('Error calculating pages completed: ' . $e->getMessage());
+        if (empty($patternValues)) {
             return 0;
         }
+
+        // Get number of days in the month
+        $monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        
+        $monthNum = array_search($month, $monthNames);
+        if ($monthNum === false) {
+            return 0;
+        }
+
+        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $monthNum + 1, $year);
+
+        // Calculate total pages: sum of pattern values * days in month
+       // $pagesPerCycle = array_sum($patternValues);
+       $pagesPerCycle=$patternValues[0];
+        $totalPages = $pagesPerCycle * $daysInMonth;
+
+        Log::info("Pattern: {$pattern}, Pages per cycle: {$pagesPerCycle}, Days: {$daysInMonth}, Total pages: {$totalPages}");
+
+        return $totalPages;
+
+    } catch (\Exception $e) {
+        Log::error('Error calculating pages completed: ' . $e->getMessage());
+        return 0;
     }
+}
 
     /**
      * Export monthly report to CSV

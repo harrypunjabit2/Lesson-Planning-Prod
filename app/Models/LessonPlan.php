@@ -25,7 +25,7 @@ class LessonPlan extends Model
         'repeat_pages',
         'col_1', 'col_2', 'col_3', 'col_4', 'col_5',
         'col_6', 'col_7', 'col_8', 'col_9', 'col_10',
-        'input_field','hw_completed','time'
+        'input_field','hw_completed','time','is_test_day','is_skipped'
     ];
 
     protected $casts = [

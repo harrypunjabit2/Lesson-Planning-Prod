@@ -494,4 +494,34 @@ class StudentProgressController extends Controller
             ], 500);
         }
     }
+
+    public function updateTestDay(Request $request)
+{
+    try {
+        $request->validate([
+            'student_name' => 'required|string',
+            'subject' => 'required|string',
+            'month' => 'required|string',
+            'date' => 'required|integer',
+            'is_test_day' => 'required|in:Y,N'
+        ]);
+
+        $result = $this->lessonPlanService->updateTestDay(
+            $request->input('student_name'),
+            $request->input('subject'),
+            $request->input('month'),
+            $request->input('date'),
+            $request->input('is_test_day')
+        );
+
+        return response()->json($result);
+
+    } catch (\Exception $e) {
+        Log::error('Error updating test day: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'error' => 'Failed to update test day: ' . $e->getMessage()
+        ], 500);
+    }
+}
 }
